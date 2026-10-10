@@ -1,0 +1,4 @@
+/* S2 style shim for native <scale/barrier> — barrier 为 no-op（同步模拟），
+ * 简化项登记见 _compat_core.h 头注释。 */
+#pragma once
+#include "../_compat_core.h"

@@ -1,0 +1,10 @@
+{
+  "sqrt": {
+    "size": 1344,
+    "sha256": "7ebb9e84324dd1d6fd0ae4598d7a598a9055113f42bf4ff400ec56b34a4baa1a"
+  },
+  "rsqrt": {
+    "size": 1024,
+    "sha256": "38a6ad9cae79c58d1b03e8295f745e0e3a652d3408103bb3f6444651c4e3f757"
+  }
+}
