@@ -11,7 +11,9 @@
 
 ## 使用方
 
-- new-ai 工作区：以子模块挂根目录 `scale-support/`（projects/su2 与 scaleExamples 共用）
+- new-ai 工作区：以 **git subtree** 挂在根目录 `scale-support/`（内容直接在主仓历史里，
+  projects/su2 与 scaleExamples 共用）；本仓（~/git/scale-support.git）作为独立分发源，
+  主仓侧用 `git subtree pull/push --prefix=scale-support` 与本仓同步
 - projects/su2 standalone：CMake 选项 `-DSCALE_SUPPORT_DIR=<本仓路径>`，或把本仓作为
   嵌套子模块放 `su2/externals/scale-support/`（自动探测）
 
