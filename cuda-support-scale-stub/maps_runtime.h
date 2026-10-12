@@ -10,6 +10,7 @@
 #include <cuda_runtime.h>
 
 #include <cstddef>
+#include <cstdint>
 
 typedef cudaError_t mapsError_t;
 #define mapsSuccess cudaSuccess
@@ -30,3 +31,12 @@ inline mapsError_t mapsGetLastError() { return cudaGetLastError(); }
 inline mapsError_t mapsDeviceSynchronize() { return cudaDeviceSynchronize(); }
 inline mapsError_t mapsGetDeviceCount(int* n) { return cudaGetDeviceCount(n); }
 inline mapsError_t mapsSetDevice(int dev) { return cudaSetDevice(dev); }
+
+/*--- style：设备"物理地址"即设备指针值本身（调用点随即将 uint64 强转回
+ *    __DDR T*，64 位 CUDA 下自洽；native 侧为 DMA 用的真实物理地址）。 ---*/
+inline void mapsMemobjGetPhysicalAddress(const void* p, unsigned long long* out) {
+  *out = (unsigned long long)(uintptr_t)p;
+}
+inline void mapsMemobjGetPhysicalAddress(const void* p, uint64_t* out) {
+  *out = (uint64_t)(uintptr_t)p;
+}

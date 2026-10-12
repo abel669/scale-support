@@ -7,11 +7,15 @@
  *        与 native SCALE 头的对应关系：scale.h / aurora.h / cooperative_groups.h /
  *        maps_runtime.h / scale/barrier / llvm/aurora_s.h / sqrt.h 均为薄转发到本文件。
  * \note 已登记的 shim 简化项（nvcc 通过 ≠ native 正确，KB cuda2scale_style）：
- *         - __mem0__..__mem3__ / __DDR / KERNEL_M / MPU_SYNC 为 no-op：
- *           地址空间与 SPU/MPU 分工边界不被验证；
- *         - memcpy_async 为同步 memcpy，scale::barrier 为 no-op：DMA 异步调度、
- *           完成等待、barrier 语义均不被验证（native 侧 memcpy_async 后必须
+ *         - __mem0__..__mem4__ / __fix4__ / __DDR / KERNEL_M / KERNEL_S /
+ *           MPU_SYNC 为 no-op：地址空间与 SPU/MPU 分工边界不被验证；
+ *         - memcpy_async 为同步 memcpy；scale::barrier<thread_scope_thread>
+ *           为 no-op（单线程 MPU 模型下无跨线程依赖）：DMA 异步调度、
+ *           完成等待均不被验证（native 侧 memcpy_async 后必须
  *           arrive_and_wait 的纪律要靠结构审查保证）；
+ *         - scale::barrier<thread_scope_block> 与 thread_block::sync()
+ *           映射为真实 __syncthreads()（SymPIC 排序核为 block 协作算法，
+ *           no-op 会出错；非简化项）；
  *         - aurora_counter_start/end 为桩（profiling 值恒 0）；
  *         - v8fp64 算术为逐 lane 标量 f64（-fmad=false 下与 native MPU 逐位一致），
  *           例外：除法是 IEEE 正确舍入，native MPU 向量 f64 除法非正确舍入
@@ -31,6 +35,8 @@
 #include <cuda_runtime.h>
 
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cmath>
 
@@ -38,8 +44,16 @@
 #define __mem1__
 #define __mem2__
 #define __mem3__
+#define __mem4__
+#define __fix0__
+#define __fix1__
+#define __fix2__
+#define __fix3__
+#define __fix4__
+#define __fix5__
 #define __DDR
 #define KERNEL_M
+#define KERNEL_S
 #define MPU_SYNC() \
   do {             \
   } while (0)
@@ -57,6 +71,24 @@ struct v8fp64 {
 struct v8s64 {
   long long v[8];
 };
+
+/*--- 16-lane f64（SymPIC miniblas 用；只用到 + / * 两个算符）。 ---*/
+struct v16fp64 {
+  double v[16];
+};
+__host__ __device__ inline v16fp64 operator+(v16fp64 a, v16fp64 b) {
+  v16fp64 r;
+  for (int i = 0; i < 16; ++i) r.v[i] = a.v[i] + b.v[i];
+  return r;
+}
+__host__ __device__ inline v16fp64 operator*(v16fp64 a, v16fp64 b) {
+  v16fp64 r;
+  for (int i = 0; i < 16; ++i) r.v[i] = a.v[i] * b.v[i];
+  return r;
+}
+
+/*--- native 的 SPU→MPU 同步调用关键字；style 下普通函数调用。 ---*/
+#define sync_call
 
 #define SC_SHIM_V8_BINOP(op)                                          \
   __host__ __device__ inline v8fp64 operator op(v8fp64 a, v8fp64 b) { \
@@ -132,9 +164,13 @@ __host__ __device__ inline v8s64 operator~(v8s64 a) {
   return r;
 }
 
-/*--- 执行域/同步桩（同步模拟，语义不被验证，见头注释登记）。 ---*/
+/*--- 执行域/同步。thread scope 保持 no-op 桩（SU2 单线程 MPU 模型下语义不验证）；
+ *    block scope 映射为真实 __syncthreads()——SymPIC 排序核是跨线程共享内存协作
+ *    算法，no-op 会产生错误结果；SU2 核只使用 thread scope，不受影响。 ---*/
 namespace cooperative_groups {
-struct thread_block {};
+struct thread_block {
+  __device__ void sync() const { __syncthreads(); }
+};
 __host__ __device__ inline thread_block this_thread_block() { return {}; }
 }  // namespace cooperative_groups
 
@@ -144,12 +180,18 @@ template <thread_scope>
 struct barrier {
   __host__ __device__ void arrive_and_wait() {}
 };
+template <>
+struct barrier<thread_scope_block> {
+  __device__ void arrive_and_wait() { __syncthreads(); }
+};
 }  // namespace scale
 
 __host__ __device__ inline void init(scale::barrier<scale::thread_scope_thread>*, int) {}
+__device__ inline void init(scale::barrier<scale::thread_scope_block>*, int) {}
 
+template <scale::thread_scope S>
 __host__ __device__ inline void memcpy_async(cooperative_groups::thread_block, void* dst, const void* src,
-                                             size_t bytes, scale::barrier<scale::thread_scope_thread>&) {
+                                             size_t bytes, scale::barrier<S>&) {
   memcpy(dst, src, bytes);
 }
 
