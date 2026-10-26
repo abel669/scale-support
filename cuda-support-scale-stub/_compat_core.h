@@ -45,6 +45,10 @@
 #define __mem2__
 #define __mem3__
 #define __mem4__
+/* 微码适配版 pushJ kernel.inc 引入的 bank/ACC 存储域关键字（native 侧为
+ * 工具链内建；style 下与 __memN__ 一样抹成空调饰）。 */
+#define __acc__
+#define __macc2__
 #define __fix0__
 #define __fix1__
 #define __fix2__
