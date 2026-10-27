@@ -61,6 +61,9 @@
 #define MPU_SYNC() \
   do {             \
   } while (0)
+/* native SPU FENCE.D（ISA 2.2.4.5，SM 访存次序）的 style 映射：CUDA 块内
+ * 共享内存写可见性 fence。 */
+#define __aurora_s_fenceD() __threadfence_block()
 
 /*--- native 侧 __builtin_* 为工具链内建；style 映射到 CUDA 的 IEEE 实现。 ---*/
 #define __builtin_sqrt(x) sqrt(x)
